@@ -40,7 +40,7 @@ const todoSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.ObjectId, ref: "user", required: true },
   startDate: Date,
   selectedDates: [Date], // array of dates
-  targetDays: String, // comma-separated days like "Monday, Wednesday"
+  targetDays: [], // comma-separated days like "Monday, Wednesday"
 });
 
 const Todo = mongoose.model("Todo", todoSchema);
@@ -185,27 +185,32 @@ app.get("/api/habits/today", async (req, res) => {
       return res.status(400).json({ message: "userId is required" });
     }
   
-    const today = dayjs().format("YYYY-MM-DD");
-  
+    const todayDayName = dayjs().format("dddd");
+    const today = dayjs().startOf('day'); // Strip time for accurate comparison
+    console.log("todayDayName",todayDayName)
+    console.log("today",today)
     try {
       const todos = await Todo.find({ userId });
-  
+      console.log("todostodays",todos)
       // Filter todos based on selectedDates OR recurring logic
       const habitsToday = todos.filter(todo => {
-        // If selectedDates includes today
-        if (todo.selectedDates?.includes(today)) {
-          return true;
+        // Skip if targetDays doesn't include today's day name
+        if (!todo.targetDays?.includes(todayDayName)) return false;
+      
+        // Skip if startDate is in the past
+        if (todo.startDate) {
+          const startDate = dayjs(
+            todo.startDate
+          ).startOf('day'); // normalize to compare only date
+          console.log("startDate",startDate)
+          console.log(startDate.isSame(today))
+          console.log(startDate.isBefore(today))
+          return startDate.isSame(today) || startDate.isBefore(today);
         }
-  
-        // If recurring habits logic applies
-        if (todo.startDate && todo.targetDays?.length) {
-          const dayOfWeek = dayjs(today).format("dddd"); // e.g. 'Monday'
-          return todo.targetDays.includes(dayOfWeek);
-        }
-  
-        return false;
+      
+        return true; // if no startDate, allow by default
       });
-  
+      console.log("habitsToday",habitsToday)
       res.json(habitsToday);
     } catch (err) {
       console.error("Error fetching today's habits:", err);
